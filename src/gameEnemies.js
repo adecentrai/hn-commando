@@ -231,8 +231,10 @@ export class Turret extends GameObjects.GameObject
 
     kill()
     {
-        if (this.destroyed)
+        // its own explosion damages it again, so guard against dying twice
+        if (this.destroyed || this.dying)
             return;
+        this.dying = true;
 
         Game.addToScore(250);
         GameEffects.explosion(this.pos, 2);

@@ -80,14 +80,26 @@ async function run()
         await wait(page, 2500);
         report.afterRun = await state(page);
 
-        // clear the mission instantly and watch the warp to mission 2
-        await page.evaluate(()=> { for (const h of hnDebug.GameObjects.hostiles) h.destroyed || h.kill(); });
+        // clear the mission through the real damage path and watch the warp to mission 2
+        await page.evaluate(()=> { for (const h of hnDebug.GameObjects.hostiles) h.destroyed || h.isDead() || h.damage(999); });
         await wait(page, 400);
         report.cleared = await state(page);
         await shot(page, 'd5-cleared');
         await wait(page, 3500);
         report.mission2 = await state(page);
         await shot(page, 'd6-mission2');
+
+        // finish turrets off the way a last bullet does (their death blast must not re-kill them)
+        report.turretKill = await page.evaluate(()=>
+        {
+            const turrets = hnDebug.GameObjects.hostiles.filter(h=> h.constructor.name == 'Turret' && !h.destroyed);
+            let error = '';
+            try { for (const t of turrets) { t.health = 1; t.damage(1); } } catch(e) { error = e.message; }
+            return {turrets: turrets.length, destroyed: turrets.filter(t=> t.destroyed).length, error};
+        });
+        const t0 = (await state(page)).time;
+        await wait(page, 1000);
+        report.turretKill.timeAdvances = (await state(page)).time > t0;
 
         // die until the game ends
         for (let i = 0; i < 60; ++i)
