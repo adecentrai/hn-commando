@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HN Commando</title>
+<meta name="description" content="HN Commando: a free retro run-and-gun game by Hobbyist Nirvana. Clear alien outposts across random planets.">
+<meta name="viewport" content="width=device-width,height=device-height,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:,">
+<style>
+:root { --navy:#1a1a2e; --gold:#e2b96f; --cream:#f5f0e8; }
+html, body {
+    margin:0; height:100%; overflow:hidden; background:#0b0b14; color:#fff;
+    font-family:"Courier New", monospace;
+    touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
+}
+
+/* title and game over */
+#screens {
+    position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    padding:16px; box-sizing:border-box; background:rgba(8,8,20,.55); overflow-y:auto;
+}
+#screens[hidden], .screen[hidden] { display:none; }
+.screen {
+    width:100%; max-width:420px; box-sizing:border-box; text-align:center;
+    background:rgba(26,26,46,.94); border:2px solid var(--gold); border-radius:10px;
+    padding:22px 18px; box-shadow:0 10px 40px rgba(0,0,0,.5); margin:auto;
+}
+h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color:var(--gold); text-shadow:3px 3px 0 #000; }
+.tag { margin:0 0 14px; color:var(--cream); font-size:14px; }
+.brief { margin:0 0 16px; font-size:14px; line-height:1.5; color:#ddd; }
+.btn {
+    display:block; width:100%; box-sizing:border-box; margin-top:10px; padding:14px;
+    border:0; border-radius:8px; cursor:pointer; text-align:center; text-decoration:none;
+    font:bold 18px "Courier New", monospace;
+}
+.btn-primary { background:var(--gold); color:var(--navy); }
+.btn-cta { background:var(--cream); color:var(--navy); }
+.btn:active { transform:translateY(1px); }
+.hint { margin:12px 0 0; font-size:12px; line-height:1.5; color:#aab; }
+.rotate { display:none; }
+@media (orientation:portrait) { .touch .rotate { display:block; } }
+.stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:14px 0 4px; }
+.stat b { display:block; font-size:22px; color:var(--gold); }
+.stat span { font-size:11px; letter-spacing:1px; color:#bbc; }
+.pitch { margin:16px 0 0; padding-top:14px; border-top:1px dashed rgba(226,185,111,.5); font-size:14px; line-height:1.5; color:var(--cream); }
+.brand { margin:14px 0 0; font-size:11px; color:#99a; }
+
+/* touch controls */
+#controls[hidden] { display:none; }
+#dpad {
+    position:fixed; z-index:10; width:132px; height:132px; border-radius:50%;
+    left:max(16px, env(safe-area-inset-left)); bottom:max(16px, env(safe-area-inset-bottom));
+    background:rgba(255,255,255,.1); border:2px solid rgba(255,255,255,.3); touch-action:none;
+}
+#dpad::before {
+    content:"▲\A◀     ▶\A▼"; white-space:pre; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:14px; line-height:2.6; text-align:center; color:rgba(255,255,255,.45);
+}
+#dpadKnob {
+    position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px 0 0 -26px;
+    border-radius:50%; background:rgba(255,255,255,.3); pointer-events:none;
+}
+#buttons {
+    position:fixed; z-index:10; display:grid; grid-template-columns:repeat(2, auto); gap:10px; align-items:end;
+    right:max(16px, env(safe-area-inset-right)); bottom:max(16px, env(safe-area-inset-bottom));
+}
+.tbtn {
+    width:62px; height:62px; padding:0; border-radius:50%; justify-self:center;
+    border:2px solid rgba(255,255,255,.45); background:rgba(255,255,255,.12); color:#fff;
+    font:bold 11px "Courier New", monospace; touch-action:none;
+}
+.tbtn.big { width:78px; height:78px; font-size:14px; }
+.tbtn.fire { border-color:rgba(255,110,130,.85); }
+.tbtn.down { background:rgba(226,185,111,.6); border-color:var(--gold); }
+</style>
+</head>
+<body>
+
+<div id="screens">
+    <div class="screen" id="title">
+        <h1>HN COMMANDO</h1>
+        <p class="tag">A retro run &amp; gun by Hobbyist Nirvana</p>
+        <p class="brief">Alien outposts are spreading across the galaxy. Drop in, wipe out every hostile, and warp to the next planet. You have 10 lives, and each cleared mission adds 3 more.</p>
+        <button class="btn btn-primary" id="startBtn">▶ START MISSION</button>
+        <p class="hint" id="controlsHint"></p>
+        <p class="hint rotate">Tip: turn your phone sideways for a wider view.</p>
+    </div>
+
+    <div class="screen" id="gameover" hidden>
+        <h1>GAME OVER</h1>
+        <div class="stats">
+            <div class="stat"><b id="goScore">0</b><span>SCORE</span></div>
+            <div class="stat"><b id="goMission">1</b><span>MISSION</span></div>
+            <div class="stat"><b id="goBest">0</b><span>BEST</span></div>
+        </div>
+        <button class="btn btn-primary" id="againBtn">↻ PLAY AGAIN</button>
+        <p class="pitch">Love retro games? The <b>HN-R36S-WiFi</b> puts 15,000+ classic games in your pocket.</p>
+        <a class="btn btn-cta" id="ctaBtn" target="_top" rel="noopener"
+           href="https://hobbyistnirvana.com/products/hn-r36s-wifi-handheld-retro-game-console-64gb-3-5-inch-display-with-wifi-support?utm_source=hn_commando&amp;utm_medium=game&amp;utm_campaign=play_page">GET THE R36S →</a>
+        <p class="brand">hobbyistnirvana.com · Happiness Awaits You</p>
+    </div>
+</div>
+
+<div id="controls" hidden>
+    <div id="dpad"><div id="dpadKnob"></div></div>
+    <div id="buttons">
+        <button class="tbtn" data-action="grenade">GRENADE</button>
+        <button class="tbtn" data-action="roll">ROLL</button>
+        <button class="tbtn big fire" data-action="fire">FIRE</button>
+        <button class="tbtn big" data-action="jump">JUMP</button>
+    </div>
+</div>
+
+<script type="module" src="src/game.js"></script>
+</body>
+</html>
