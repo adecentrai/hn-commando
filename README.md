@@ -30,7 +30,7 @@ Prints a JSON report and saves screenshots to `<outDir>`.
 ## Game rules
 
 - Every mission is a new random planet (`src/gameLevel.js`); clear all hostiles to warp on.
-- 10 lives, +3 per cleared mission, 3 grenades per life (crates may drop more, max 6).
+- 8 lives, +2 per cleared mission, 3 grenades per life (crates may drop more, max 6).
 - Hostiles: hoppers (touch damage), alien soldiers (patrol, burst fire), turrets (aim, mission 2+).
 - Terrain is destructible except metal (bedrock, walls, outpost roof corners, some girders).
 
@@ -71,7 +71,8 @@ show the skin on desktop, `?skin=off` for plain overlay buttons on phones.
 ## Store hooks
 
 - Game over shows the score and a "GET THE R36S" link (`target="_top"`) with
-  `utm_source=hn_commando&utm_medium=game&utm_campaign=play_page`.
+  `?ref=hn_commando` (no utm tags on links inside our own store: they would take the credit
+  for a sale away from the ad that brought the buyer).
 - `track()` in `src/game.js` sends `start`, `mission_clear`, `game_over` and `cta_click`
   events to `gtag` when the game runs on the store's own domain, and `postMessage`s
   `{source:'hn-commando', event, ...}` to the parent page when it runs in an iframe.

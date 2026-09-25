@@ -13,15 +13,35 @@
 const $ = (id)=> document.getElementById(id);
 const params = new URLSearchParams(location.search);
 
-export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+// a touchscreen laptop still has a fine pointer, so it keeps the desktop controls
+export const isTouch = matchMedia('(pointer: coarse)').matches;
 export const skin = params.get('skin') == 'r36s' || isTouch && params.get('skin') != 'off';
 export const touchInput = {move: {x:0, y:0}, fire:false, jump:false, roll:false, grenade:false};
 
 // the engine renders into the R36S screen when the skin is on
 export const rootElement = skin ? $('screen') : undefined;
 
-let handlers = {}, screenShownTime = 0;
+let handlers = {}, screenShownTime = 0, toastTimer;
+const screenIsReady = ()=> performance.now() - screenShownTime > 800;
 const vibrate = (ms)=> { try { navigator.vibrate && navigator.vibrate(ms); } catch(e) {} };
+
+// several controls can drive the same input (d-pad and left stick, B and right stick),
+// so each keeps its own state and the inputs combine them
+const moveSources = new Map, actionSources = {fire: new Set, jump: new Set, roll: new Set, grenade: new Set};
+function setMove(source, x, y)
+{
+    x || y ? moveSources.set(source, {x, y}) : moveSources.delete(source);
+    let mx = 0, my = 0;
+    for (const m of moveSources.values())
+        mx += m.x, my += m.y;
+    touchInput.move.x = Math.sign(mx);
+    touchInput.move.y = Math.sign(my);
+}
+function setAction(action, source, down)
+{
+    down ? actionSources[action].add(source) : actionSources[action].delete(source);
+    touchInput[action] = actionSources[action].size > 0;
+}
 
 if (skin)
 {
@@ -32,6 +52,16 @@ if (skin)
         document.body.classList.add('shell-' + shell);
     $('device').hidden = false;
     $('screen').appendChild($('screens'));
+    $('screen').appendChild($('toast'));
+
+    // screen-relative sizing unit, works on browsers without container query units
+    const screen = $('screen');
+    const setUnit = ()=> screen.style.setProperty('--cq', screen.clientWidth/100 + 'px');
+    setUnit();
+    if (window.ResizeObserver)
+        new ResizeObserver(setUnit).observe(screen);
+    else
+        addEventListener('resize', setUnit);
 }
 
 export function init(callbacks)
@@ -43,6 +73,9 @@ export function init(callbacks)
     for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel'])
         el.addEventListener(type, e=> e.stopPropagation(), {passive: true});
 
+    // stop pinch zoom on iOS when two thumbs move at once
+    document.addEventListener('gesturestart', e=> e.preventDefault());
+
     $('startBtn').addEventListener('click', ()=> handlers.onStart());
     $('againBtn').addEventListener('click', ()=> handlers.onStart());
     $('ctaBtn').addEventListener('click', ()=> handlers.onCta());
@@ -51,7 +84,7 @@ export function init(callbacks)
     // P or Escape pauses
     addEventListener('keydown', e=>
     {
-        if (e.code == 'Enter' && !$('screens').hidden && performance.now() - screenShownTime > 800)
+        if (e.code == 'Enter' && !$('screens').hidden && screenIsReady())
             handlers.onStart();
         else if ((e.code == 'KeyP' || e.code == 'Escape') && $('screens').hidden)
             handlers.onPause();
@@ -66,8 +99,10 @@ export function init(callbacks)
     if (isTouch || skin)
         initControls();
 
-    // release everything if the page loses focus mid press
+    // release everything if the page loses focus or is hidden mid press
     addEventListener('blur', releaseTouchInput);
+    addEventListener('pagehide', releaseTouchInput);
+    document.addEventListener('visibilitychange', ()=> document.hidden && releaseTouchInput());
 }
 
 export function showTitle() { show('title'); }
@@ -78,6 +113,16 @@ export function showGameOver({score, mission, best})
     $('goMission').textContent = mission;
     $('goBest').textContent = best.toLocaleString('en-IN');
     show('gameover');
+}
+
+// short message over the game, shown on every screen
+export function toast(text, ms=1500)
+{
+    const el = $('toast');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> el.hidden = true, ms);
 }
 
 function show(id)
@@ -92,8 +137,13 @@ function show(id)
 
 function releaseTouchInput()
 {
+    moveSources.clear();
     touchInput.move.x = touchInput.move.y = 0;
-    touchInput.fire = touchInput.jump = touchInput.roll = touchInput.grenade = false;
+    for (const action in actionSources)
+    {
+        actionSources[action].clear();
+        touchInput[action] = false;
+    }
     for (const el of document.querySelectorAll('.down'))
         el.classList.remove('down');
     for (const el of document.querySelectorAll('[data-knob]'))
@@ -118,19 +168,19 @@ function initControls()
                 dx /= length, dy /= length;
 
             // up and down need a firmer push so running does not grab ladders
-            touchInput.move.x = Math.abs(dx) > .3 ? Math.sign(dx) : 0;
-            touchInput.move.y = Math.abs(dy) > .55 ? -Math.sign(dy) : 0;
+            const x = Math.abs(dx) > .3 ? Math.sign(dx) : 0;
+            const y = Math.abs(dy) > .55 ? -Math.sign(dy) : 0;
+            setMove(pad, x, y);
             if (knob)
                 knob.style.transform = `translate(${dx*r.width*.25}px, ${dy*r.height*.25}px)`;
-            pad.dataset.dir = (touchInput.move.y > 0 ? 'u' : touchInput.move.y < 0 ? 'd' : '') +
-                (touchInput.move.x > 0 ? 'r' : touchInput.move.x < 0 ? 'l' : '');
+            pad.dataset.dir = (y > 0 ? 'u' : y < 0 ? 'd' : '') + (x > 0 ? 'r' : x < 0 ? 'l' : '');
         };
         const end = (e)=>
         {
             if (e.pointerId !== padPointer)
                 return;
             padPointer = undefined;
-            touchInput.move.x = touchInput.move.y = 0;
+            setMove(pad, 0, 0);
             knob && (knob.style.transform = '');
             pad.dataset.dir = '';
         };
@@ -147,24 +197,65 @@ function initControls()
         pad.addEventListener('lostpointercapture', end);
     }
 
-    // held action buttons, each tracks its own finger so they combine with the d-pad
-    for (const button of document.querySelectorAll('[data-action]'))
+    // ABXY: a thumb can slide from one face button to the next, like on the real pad
+    const abxy = $('abxy');
+    const faceFingers = new Map; // pointerId -> face button under that finger
+    const faceAt = (e)=>
+    {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        return el && el.closest && abxy.contains(el) ? el.closest('.face') : null;
+    };
+    const setFace = (pointerId, face)=>
+    {
+        const old = faceFingers.get(pointerId);
+        if (old == face)
+            return;
+        if (old)
+        {
+            setAction(old.dataset.action, pointerId, false);
+            [...faceFingers.values()].filter(f=> f == old).length == 1 && old.classList.remove('down');
+        }
+        face ? faceFingers.set(pointerId, face) : faceFingers.delete(pointerId);
+        if (face)
+        {
+            setAction(face.dataset.action, pointerId, true);
+            face.classList.add('down');
+            vibrate(10);
+        }
+    };
+    abxy.addEventListener('pointerdown', e=>
+    {
+        const face = faceAt(e);
+        if (!face)
+            return;
+        abxy.setPointerCapture(e.pointerId);
+        setFace(e.pointerId, face);
+        e.preventDefault();
+    });
+    abxy.addEventListener('pointermove', e=> faceFingers.has(e.pointerId) && setFace(e.pointerId, faceAt(e) || faceFingers.get(e.pointerId)));
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
+        abxy.addEventListener(type, e=> setFace(e.pointerId, null));
+    abxy.addEventListener('contextmenu', e=> e.preventDefault());
+
+    // other held buttons (right stick, plain overlay buttons), each tracks its own finger
+    for (const button of document.querySelectorAll('[data-action]:not(.face)'))
     {
         const action = button.dataset.action;
         const knob = button.querySelector('[data-knob]');
         let pointer;
         const release = (e)=>
         {
-            if (e && e.pointerId !== pointer)
+            if (e.pointerId !== pointer)
                 return;
-            touchInput[action] = false;
+            pointer = undefined;
+            setAction(action, button, false);
             button.classList.remove('down');
             knob && (knob.style.transform = '');
         };
         button.addEventListener('pointerdown', e=>
         {
             pointer = e.pointerId;
-            touchInput[action] = true;
+            setAction(action, button, true);
             button.classList.add('down');
             button.setPointerCapture(e.pointerId);
             skin && vibrate(10);
@@ -197,7 +288,7 @@ function initControls()
             skin && vibrate(15);
             e.preventDefault();
             if (command == 'start')
-                $('screens').hidden ? handlers.onPause() : handlers.onStart();
+                $('screens').hidden ? handlers.onPause() : screenIsReady() && handlers.onStart();
             else if (command == 'select')
                 handlers.onSelect();
             else if (command == 'fn')
@@ -212,7 +303,7 @@ function initControls()
     for (const id of ['title', 'gameover'])
         $(id).addEventListener('click', e=>
         {
-            if (skin && !e.target.closest('a, button'))
+            if (skin && !e.target.closest('a, button') && screenIsReady())
                 handlers.onStart();
         });
 }

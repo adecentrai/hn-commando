@@ -18,6 +18,16 @@ const {vec2, hsl, Timer} = LJS;
 export const hostiles = [];
 export const hostilesAlive = ()=> hostiles.filter(o=> !o.destroyed && !o.isDead()).length;
 
+// everything a bullet can hit, so bullets don't test every particle emitter and weapon
+export const targets = [];
+export function pruneTargets()
+{
+    let n = 0;
+    for (const o of targets)
+        o.destroyed || (targets[n++] = o);
+    targets.length = n;
+}
+
 export class GameObject extends LJS.EngineObject
 {
     constructor(pos, size, tileInfo, angle)
@@ -27,6 +37,7 @@ export class GameObject extends LJS.EngineObject
         this.isGameObject = 1;
         this.team = '';
         this.damageTimer = new Timer;
+        targets.push(this);
     }
 
     update()
@@ -81,12 +92,14 @@ export class Crate extends GameObject
         this.setCollision();
     }
 
-    kill()
+    kill(damagingObject)
     {
         if (this.destroyed)
             return;
 
-        Game.addToScore(10);
+        // only the player earns points for crates, not stray enemy fire
+        if (!damagingObject || damagingObject.team != 'enemy')
+            Game.addToScore(10);
         GameEffects.sound_destroyObject.play(this.pos);
         GameEffects.makeDebris(this.pos, this.color, 30);
         if (LJS.rand() < .3)
@@ -155,10 +168,10 @@ export class GrenadePickup extends GameObject
         const player = Game.player;
         if (!player || player.isDead() || this.getAliveTime() < .3)
             return;
-        if (this.pos.distanceSquared(player.pos) > .6)
-            return;
+        if (this.pos.distanceSquared(player.pos) > .6 || player.grenadeCount >= Game.MAX_GRENADES)
+            return; // left for later when the player is already full
 
-        player.grenadeCount = LJS.min(player.grenadeCount + 1, Game.MAX_GRENADES);
+        ++player.grenadeCount;
         GameEffects.sound_pickup.play(this.pos);
         this.destroy();
     }
@@ -266,7 +279,7 @@ export class Weapon extends LJS.EngineObject
             for (; this.fireTimeBuffer > 0; this.fireTimeBuffer -= 1/this.fireRate)
             {
                 // create bullet
-                this.fireSound.play(this.pos);
+                GameEffects.playSound(this.fireSound, this.pos);
                 this.localAngle = -LJS.rand(.2,.25);
                 this.recoilTimer.set(.1);
                 const direction = vec2(this.bulletSpeed*this.getMirrorSign(), 0);
@@ -312,7 +325,7 @@ export class Bullet extends LJS.EngineObject
         {
             if (o.isGameObject && !o.isDead() && !(this.team && o.team == this.team))
                 this.collideWithObject(o)
-        });
+        }, targets);
 
         this.angle = this.velocity.angle();
         this.range -= this.getSpeed();

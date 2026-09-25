@@ -225,7 +225,7 @@ export class Turret extends GameObjects.GameObject
             const bullet = new GameObjects.Bullet(muzzle.add(direction.scale(.6)), this, direction.scale(.18), 1);
             bullet.range = 14;
             bullet.color = hsl(.05,1,.6);
-            GameEffects.sound_enemyShoot.play(this.pos);
+            GameEffects.playSound(GameEffects.sound_enemyShoot, this.pos);
         }
     }
 
@@ -237,7 +237,7 @@ export class Turret extends GameObjects.GameObject
         this.dying = true;
 
         Game.addToScore(250);
-        GameEffects.explosion(this.pos, 2);
+        GameEffects.explosion(this.pos, 2, 'player'); // the blast never punishes the shooter
         this.destroy();
     }
 

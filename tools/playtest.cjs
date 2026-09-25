@@ -101,6 +101,41 @@ async function run()
         await wait(page, 1000);
         report.turretKill.timeAdvances = (await state(page)).time > t0;
 
+        // a turret's death blast spares a player standing right next to it
+        report.turretBlastSparesPlayer = await page.evaluate(()=>
+        {
+            const p = hnDebug.state.player, LJS = hnDebug.LJS;
+            p.spawnProtection = 0;
+            hnDebug.GameLevel.foregroundTileLayer; // level is live
+            const t = hnDebug.spawnHostile('turret', p.pos.add(LJS.vec2(1, 0)));
+            t.health = 1; t.damage(1);
+            return !p.isDead();
+        });
+
+        // a grenade blast carves terrain through the batched redraw, with no errors
+        report.grenadeCarves = await page.evaluate(()=>
+        {
+            const LJS = hnDebug.LJS, p = hnDebug.state.player;
+            const below = p.pos.add(LJS.vec2(3, -2)).floor();
+            const before = LJS.tileCollisionGetData(below);
+            hnDebug.explosion(below.add(LJS.vec2(.5)), 3);
+            return {before, after: LJS.tileCollisionGetData(below)};
+        });
+        await wait(page, 600);
+        await shot(page, 'd6b-grenade-carve');
+
+        // clearing the last hostile in the same moment the player dies still clears the mission
+        report.clearWhileDying = await page.evaluate(async ()=>
+        {
+            const livesBefore = hnDebug.state.lives;
+            const p = hnDebug.state.player; p.spawnProtection = 0; p.kill();
+            for (const h of hnDebug.GameObjects.hostiles) h.destroyed || h.isDead() || h.damage(999);
+            await new Promise(r=> setTimeout(r, 400));
+            return {livesBefore, state: hnDebug.state.state, lives: hnDebug.state.lives};
+        });
+        await wait(page, 3500);
+        report.afterClearWhileDying = await state(page);
+
         // die until the game ends
         for (let i = 0; i < 60; ++i)
         {
@@ -165,9 +200,27 @@ async function run()
         const released = await page.evaluate(()=> !document.querySelector('.down'));
 
         // START pauses and resumes during play on the skin
-        let pause;
+        let pause, slide, selectToast;
         if (startSel != '#startBtn')
         {
+            // a thumb sliding from B onto A hands the press over: fire stops, jump starts
+            const b = await center('.face.b'), a = await center('.face.a');
+            await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [{x: b.x, y: b.y, id: 3}]});
+            await wait(page, 150);
+            const onB = await page.evaluate(()=> [document.querySelector('.face.b').classList.contains('down'), document.querySelector('.face.a').classList.contains('down')]);
+            await cdp.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{x: a.x, y: a.y, id: 3}]});
+            await wait(page, 150);
+            const onA = await page.evaluate(()=> [document.querySelector('.face.b').classList.contains('down'), document.querySelector('.face.a').classList.contains('down')]);
+            await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+            await wait(page, 150);
+            slide = {onB, onA, released: await page.evaluate(()=> !document.querySelector('.face.down'))};
+
+            // SELECT shows its message
+            await page.tap('[data-command=select]');
+            await wait(page, 200);
+            selectToast = await page.evaluate(()=> !document.getElementById('toast').hidden && document.getElementById('toast').textContent);
+            await page.tap('[data-command=select]');
+
             await page.tap(startSel);
             await wait(page, 300);
             const t0 = (await state(page)).time;
@@ -178,7 +231,7 @@ async function run()
             await wait(page, 400);
             pause = {paused, resumed: (await state(page)).time > t0};
         }
-        report[label] = {started, before: before.pos, after: after.pos, fireDown, released, pause};
+        report[label] = {started, before: before.pos, after: after.pos, fireDown, released, pause, slide, selectToast};
         await context.close();
     }
 

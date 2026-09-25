@@ -9,6 +9,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:,">
+<link rel="canonical" href="https://hobbyistnirvana.com/pages/play">
+<meta property="og:title" content="HN Commando: free retro run &amp; gun">
+<meta property="og:description" content="Play free on a virtual HN-R36S handheld. By Hobbyist Nirvana.">
+<meta property="og:url" content="https://hobbyistnirvana.com/pages/play">
+<meta property="og:type" content="website">
 <style>
 :root { --navy:#1a1a2e; --gold:#e2b96f; --cream:#f5f0e8; }
 html, body {
@@ -108,7 +113,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
     content:"HN-R36S"; position:absolute; left:0; right:0; bottom:calc(var(--w) * .012); text-align:center;
     font:bold calc(var(--w) * .024) "Courier New", monospace; letter-spacing:.3em; color:rgba(255,255,255,.28);
 }
-#screen { position:relative; width:100%; aspect-ratio:4/3; background:#000; overflow:hidden; container-type:size; }
+#screen { position:relative; width:100%; aspect-ratio:4/3; background:#000; overflow:hidden; }
 
 .side { display:flex; flex-direction:column; align-items:center; justify-content:space-evenly; }
 #left { grid-area:left; }
@@ -172,18 +177,26 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
 .stick.down .knob { filter:brightness(1.4); }
 
 /* game screens shrink to fit inside the 4:3 R36S screen */
-.skin #screens { position:absolute; inset:0; z-index:20; padding:3cqw; background:rgba(8,8,20,.45); overflow:hidden; }
-.skin .screen { max-width:none; height:100%; display:flex; flex-direction:column; justify-content:center; padding:3cqw 4cqw; border-width:1px; border-radius:2cqw; background:rgba(26,26,46,.82); }
-.skin h1 { font-size:9cqw; margin:0; text-shadow:.6cqw .6cqw 0 #000; }
-.skin .tag, .skin .brand { font-size:3.3cqw; margin:.5cqw 0 2cqw; }
+.skin #screens { position:absolute; inset:0; z-index:20; padding:calc(var(--cq, 3.5px) * 3); background:rgba(8,8,20,.45); overflow:hidden; }
+.skin .screen { max-width:none; height:100%; display:flex; flex-direction:column; justify-content:center; padding:calc(var(--cq, 3.5px) * 3) calc(var(--cq, 3.5px) * 4); border-width:1px; border-radius:calc(var(--cq, 3.5px) * 2); background:rgba(26,26,46,.82); }
+.skin h1 { font-size:calc(var(--cq, 3.5px) * 9); margin:0; text-shadow:calc(var(--cq, 3.5px) * .6) calc(var(--cq, 3.5px) * .6) 0 #000; }
+.skin .tag, .skin .brand { font-size:calc(var(--cq, 3.5px) * 3.3); margin:calc(var(--cq, 3.5px) * .5) 0 calc(var(--cq, 3.5px) * 2); }
 .skin .brief, .skin .rotate, .skin #startBtn, .skin #againBtn { display:none; }
-.skin .press { display:block; margin:2cqw 0 1cqw; font:bold 5cqw "Courier New", monospace; color:var(--cream); animation:blink 1s steps(2) infinite; }
-.skin .hint { font-size:3.3cqw; margin:1cqw 0 0; }
-.skin .stats { margin:2cqw 0 0; gap:2cqw; }
-.skin .stat b { font-size:6cqw; } .skin .stat span { font-size:2.8cqw; }
-.skin .pitch { font-size:3.4cqw; margin:2cqw 0 0; padding-top:2cqw; }
-.skin .btn-cta { font-size:4cqw; padding:2.2cqw; margin-top:2cqw; border-radius:1.5cqw; }
+.skin .press { display:block; margin:calc(var(--cq, 3.5px) * 2) 0 calc(var(--cq, 3.5px) * 1); font:bold calc(var(--cq, 3.5px) * 5) "Courier New", monospace; color:var(--cream); animation:blink 1s steps(2) infinite; }
+.skin .hint { font-size:calc(var(--cq, 3.5px) * 3.3); margin:calc(var(--cq, 3.5px) * 1) 0 0; }
+.skin .stats { margin:calc(var(--cq, 3.5px) * 2) 0 0; gap:calc(var(--cq, 3.5px) * 2); }
+.skin .stat b { font-size:calc(var(--cq, 3.5px) * 6); } .skin .stat span { font-size:calc(var(--cq, 3.5px) * 2.8); }
+.skin .pitch { font-size:calc(var(--cq, 3.5px) * 3.4); margin:calc(var(--cq, 3.5px) * 2) 0 0; padding-top:calc(var(--cq, 3.5px) * 2); }
+.skin .btn-cta { font-size:calc(var(--cq, 3.5px) * 4); padding:calc(var(--cq, 3.5px) * 2.2); margin-top:calc(var(--cq, 3.5px) * 2); border-radius:calc(var(--cq, 3.5px) * 1.5); }
 @keyframes blink { 50% { opacity:0; } }
+
+/* short messages (sound on/off, controls help) */
+#toast {
+    position:fixed; left:50%; bottom:max(24px, env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:30;
+    padding:8px 14px; border-radius:8px; background:rgba(26,26,46,.92); border:1px solid var(--gold);
+    color:var(--cream); font:bold 14px "Courier New", monospace; white-space:nowrap; pointer-events:none;
+}
+.skin #toast { position:absolute; bottom:calc(var(--cq, 3.5px) * 4); font-size:calc(var(--cq, 3.5px) * 3.6); padding:calc(var(--cq, 3.5px) * 1.2) calc(var(--cq, 3.5px) * 2.4); }
 
 /* phone on its side: screen in the middle, controls either side */
 @media (orientation:landscape) {
@@ -201,6 +214,12 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
     #mid { flex-direction:row; justify-content:center; padding-top:calc(var(--h) * .02); gap:calc(var(--h) * .05); }
     #mid .speaker { display:none; }
 }
+/* browsers without dvh (iOS < 15.4) use vh */
+@supports not (height:1dvh) {
+    @media (orientation:portrait) { #device { --w:min(100vw, 56vh); height:min(100vh, calc(var(--w) * 1.75)); } }
+    @media (orientation:landscape) { #device { --h:min(100vh, 46vw); height:var(--h); } }
+}
+
 </style>
 </head>
 <body>
@@ -208,8 +227,8 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
 <div id="device" hidden>
     <div id="bezel"><div id="screen"></div></div>
     <div id="left" class="side">
-        <div id="dpadCross" data-move><div class="arrows"><span>▲</span><span>◀</span><span>▶</span><span>▼</span></div></div>
-        <div class="stick" data-move aria-label="Left stick: move"><div class="knob" data-knob></div></div>
+        <div id="dpadCross" data-move role="group" aria-label="D-pad: move and climb"><div class="arrows"><span>▲</span><span>◀</span><span>▶</span><span>▼</span></div></div>
+        <div class="stick" data-move role="group" aria-label="Left stick: move"><div class="knob" data-knob></div></div>
     </div>
     <div id="mid">
         <div class="speaker"></div>
@@ -234,7 +253,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
     <div class="screen" id="title">
         <h1>HN COMMANDO</h1>
         <p class="tag">A retro run &amp; gun by Hobbyist Nirvana</p>
-        <p class="brief">Alien outposts are spreading across the galaxy. Drop in, wipe out every hostile, and warp to the next planet. You have 10 lives, and each cleared mission adds 3 more.</p>
+        <p class="brief">Every planet hides a nest of alien troopers, blob hoppers and gun turrets. Blast through the rock, clear the map, then warp on to a new world. Start with 8 lives and earn 2 more for every planet you clear.</p>
         <button class="btn btn-primary" id="startBtn">▶ START MISSION</button>
         <p class="press">PRESS START</p>
         <p class="hint" id="controlsHint"></p>
@@ -252,7 +271,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
         <p class="press">PRESS START</p>
         <p class="pitch">Love retro games? The <b>HN-R36S-WiFi</b> puts 15,000+ classic games in your pocket.</p>
         <a class="btn btn-cta" id="ctaBtn" target="_top" rel="noopener"
-           href="https://hobbyistnirvana.com/products/hn-r36s-wifi-handheld-retro-game-console-64gb-3-5-inch-display-with-wifi-support?utm_source=hn_commando&amp;utm_medium=game&amp;utm_campaign=play_page">GET THE R36S →</a>
+           href="https://hobbyistnirvana.com/products/hn-r36s-wifi-handheld-retro-game-console-64gb-3-5-inch-display-with-wifi-support?ref=hn_commando">GET THE R36S →</a>
         <p class="brand">hobbyistnirvana.com · Happiness Awaits You</p>
     </div>
 </div>
@@ -266,6 +285,8 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
         <button class="tbtn big" data-action="jump">JUMP</button>
     </div>
 </div>
+
+<div id="toast" hidden role="status"></div>
 
 <script type="module" src="src/game.js"></script>
 </body>

@@ -29,6 +29,7 @@ export function buildLevel(mission)
 {
     // destroy all objects
     LJS.engineObjectsDestroy();
+    GameEffects.resetTerrainChanges();
 
     // create the level
     levelColor = LJS.randColor(hsl(0,0,.2), hsl(0,0,.8));
@@ -122,11 +123,12 @@ function generateLevel(mission)
         const w = LJS.randInt(3, 8), h = LJS.randInt(1, 3);
         if (cy > H-6)
             continue;
+        // a metal deck keeps a ground gap in the middle so the ladder can come through it
         const metal = LJS.rand() < .25;
         for (let dx=-w; dx<=w; ++dx)
         for (let dy=-h; dy<=0; ++dy)
             if ((dx/w)**2 + (dy/h)**2 <= 1)
-                setTile(cx+dx, cy+dy, metal && !dy ? tileMetal : tileGround);
+                setTile(cx+dx, cy+dy, metal && !dy && dx ? tileMetal : tileGround);
         if (LJS.rand() < .6)
             ladder(cx, surface[cx]+1, cy);
     }
@@ -177,6 +179,21 @@ function generateLevel(mission)
     for (let y=0; y<H; ++y)
         fg[0][y] = fg[W-1][y] = tileMetal;
 
+    // open cells connected to the sky, hostiles go only where the player can get to them
+    // without digging down (bullets fly sideways and jumps break tiles upward)
+    const reachable = makeGrid();
+    const frontier = [];
+    for (let x=1; x<W-1; ++x)
+        if (fg[x][H-2] <= 0 || fg[x][H-2] == tileLadder)
+            reachable[x][H-2] = 1, frontier.push([x, H-2]);
+    while (frontier.length)
+    {
+        const [x, y] = frontier.pop();
+        for (const [nx, ny] of [[x+1,y], [x-1,y], [x,y+1], [x,y-1]])
+            if (inside(nx,ny) && !reachable[nx][ny] && !isSolid(nx,ny))
+                reachable[nx][ny] = 1, frontier.push([nx, ny]);
+    }
+
     // find open spots to stand on
     const standable = (x,y)=> inside(x,y) && y < H-2 && !fg[x][y] && !fg[x][y+1] && isSolid(x,y-1);
     const taken = new Set;
@@ -222,19 +239,19 @@ function generateLevel(mission)
     const count = (type)=> hostiles.filter(h=> h.type==type).length;
     while (count('turret') < turrets)
     {
-        const pos = pickSpot((x,y)=> y > surface[x] - 1);
+        const pos = pickSpot((x,y)=> y > surface[x] - 1 && reachable[x][y]);
         if (!pos) break;
         hostiles.push({type:'turret', pos});
     }
     while (count('soldier') < soldiers)
     {
-        const pos = pickSpot();
+        const pos = pickSpot((x,y)=> reachable[x][y]);
         if (!pos) break;
         hostiles.push({type:'soldier', pos});
     }
     while (hostiles.length < total)
     {
-        const pos = pickSpot();
+        const pos = pickSpot((x,y)=> reachable[x][y]);
         if (!pos) break;
         hostiles.push({type:'hopper', pos});
     }
@@ -293,7 +310,7 @@ function shuffle(array)
 
 function loadLevelData(map)
 {
-    tileLayers = LJS.tileLayersLoad(map, tile(0,16,1), 0, 1);
+    tileLayers = LJS.tileLayersLoad(map, tile(0,16,1), 0, 1, false); // drawn once below, after the tile data is final
     levelSize = tileLayers[0].size;
     foregroundTileLayer = tileLayers[tileLayers.length-1];
 
@@ -341,7 +358,7 @@ function loadLevelData(map)
             // apply decoration to level tiles
             for (let x=levelSize.x; x--;)
             for (let y=levelSize.y; y--;)
-                decorateTile(vec2(x,y), tileLayer);
+                decorateTile(vec2(x,y), tileLayer, true);
         }
         tileLayer.redraw();
     }
@@ -362,7 +379,8 @@ export function findSafeSpawn(pos)
     return playerStartPos;
 }
 
-export function decorateTile(pos, tileLayer)
+// fullRedraw: the layer was just cleared, so empty cells need no clearing
+export function decorateTile(pos, tileLayer, fullRedraw=false)
 {
     LJS.ASSERT((pos.x|0) == pos.x && (pos.y|0)== pos.y);
     if (!tileLayer)
@@ -375,7 +393,7 @@ export function decorateTile(pos, tileLayer)
         if (tileType <= 0)
         {
             // force it to clear if it is empty
-            tileType || tileLayer.clearData(pos, true);
+            tileType || fullRedraw || tileLayer.clearData(pos, true);
             return;
         }
         if (tileType == tileType_breakable)

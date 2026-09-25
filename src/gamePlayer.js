@@ -22,6 +22,7 @@ export class Player extends GameCharacter.Character
         super(pos);
         this.team = 'player';
         this.color = hsl(.33,.85,.6);
+        this.bloodColor = hsl(.12,1,.65); // sparks rather than blood
         this.spawnProtection = 2;
         this.grenadeCount = Game.GRENADES_PER_LIFE;
         this.weapon.fireRate = 10;

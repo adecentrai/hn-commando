@@ -1,7 +1,7 @@
 /*
     HN Commando - a retro run-and-gun for hobbyistnirvana.com
     - Clear every hostile on a random planet, then warp to the next one
-    - 10 lives, +3 for each cleared mission, 3 grenades per life
+    - 8 lives, +2 for each cleared mission, 3 grenades per life
     - Keyboard, mouse, gamepad or on-screen touch controls
     - Posts game events to the parent page when embedded in an iframe
     Built on the LittleJS platformer example (MIT, Frank Force)
@@ -18,7 +18,7 @@ import * as GameEnemies from './gameEnemies.js';
 import * as UI from './ui.js';
 const {vec2, Timer} = LJS;
 
-export const START_LIVES = 10, LIVES_PER_MISSION = 3, GRENADES_PER_LIFE = 3, MAX_GRENADES = 6;
+export const START_LIVES = 8, LIVES_PER_MISSION = 2, GRENADES_PER_LIFE = 3, MAX_GRENADES = 6;
 
 export let spriteAtlas, player, score = 0, lives = START_LIVES, mission = 1;
 let state = 'title'; // title, playing, cleared, over
@@ -37,7 +37,7 @@ export function track(event, params={})
 
 // ?debug exposes game state for automated testing
 if (new URLSearchParams(location.search).has('debug'))
-    window.hnDebug = {LJS, GameObjects, GameLevel,
+    window.hnDebug = {LJS, GameObjects, GameLevel, spawnHostile: GameEnemies.spawnHostile, explosion: GameEffects.explosion,
         get state() { return {state, mission, lives, score, player, hostiles: GameObjects.hostilesAlive()}; }};
 
 // touch devices use the DOM controls, the engine's own touch handling stays off
@@ -53,13 +53,16 @@ else
     LJS.setCanvasMaxAspect(2.5);
 }
 
-// short messages drawn over the game, timed in real time so they show while paused
-let toastText = '', toastUntil = 0;
-function toast(text, seconds=1.5)
-{
-    toastText = text;
-    toastUntil = performance.now() + seconds*1e3;
-}
+// lighter particle effects on phones
+if (UI.isTouch)
+    LJS.setParticleEmitRateScale(.5);
+
+// iOS only unlocks audio on touchend or click, not pointerdown, so resume on those
+// (capture phase, so the UI's stopPropagation can't hide them)
+const resumeAudio = ()=> LJS.audioContext && LJS.audioContext.state != 'running' && LJS.audioContext.resume();
+for (const type of ['touchend', 'click', 'keydown'])
+    document.addEventListener(type, resumeAudio, true);
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e) {} // play with the iOS silent switch on
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -67,6 +70,7 @@ function loadMission()
 {
     GameObjects.hostiles.length = 0;
     const spawns = GameLevel.buildLevel(mission);
+    GameObjects.targets.length = 0;
     for (const pos of spawns.crates)
         new GameObjects.Crate(pos);
     for (const pos of spawns.coins)
@@ -110,7 +114,7 @@ function togglePause()
 function toggleSound()
 {
     LJS.setSoundEnable(!LJS.soundEnable);
-    toast(LJS.soundEnable ? 'SOUND ON' : 'SOUND OFF');
+    UI.toast(LJS.soundEnable ? 'SOUND ON' : 'SOUND OFF');
 }
 
 function gameOver()
@@ -154,7 +158,7 @@ async function gameInit()
         onStart: startGame,
         onPause: togglePause,
         onSelect: toggleSound,
-        onFn: ()=> toast('B FIRE · A JUMP · Y GRENADE · X ROLL', 2.5),
+        onFn: ()=> UI.toast(UI.skin ? 'B FIRE · A JUMP · Y GRENADE · X ROLL' : 'Z FIRE · UP JUMP · C GRENADE · X ROLL', 2500),
         onCta: ()=> track('cta_click', {score, mission}),
     });
 
@@ -168,16 +172,13 @@ async function gameInit()
 
 function gameUpdate()
 {
+    GameObjects.pruneTargets();
     if (state == 'playing')
     {
-        if (player.isDead())
+        if (!GameObjects.hostilesAlive())
         {
-            if (player.deadTimer > 1.5)
-                lives > 0 ? respawn() : gameOver();
-        }
-        else if (!GameObjects.hostilesAlive())
-        {
-            // mission cleared, player can't be hurt while warping out
+            // mission cleared, even if the last blast also took the player down,
+            // and nothing can hurt the player while warping out
             state = 'cleared';
             stateTimer.set(3);
             lives += LIVES_PER_MISSION;
@@ -186,6 +187,8 @@ function gameUpdate()
             GameEffects.sound_mission.play();
             track('mission_clear', {mission, score});
         }
+        else if (player.isDead() && player.deadTimer > 1.5)
+            lives > 0 ? respawn() : gameOver();
     }
     else if (state == 'cleared' && stateTimer.elapsed())
     {
@@ -216,6 +219,8 @@ function gameUpdatePost()
 
 function gameRender()
 {
+    GameEffects.flushTerrainChanges();
+
     // zoom so roughly 18 tiles fit across, or 11 tiles tall on wide screens
     const s = LJS.mainCanvasSize;
     LJS.setCameraScale(LJS.clamp(LJS.min(s.x/18, s.y/11), 20, 72));
@@ -262,7 +267,7 @@ function gameRenderPost()
         drawText(title, W/2, H*.3, u*2, 'center', '#e2b96f');
         drawText(subtitle, W/2, H*.3 + u*2.4, u, 'center');
     };
-    if (LJS.paused)
+    if (LJS.paused && state != 'over')
         banner('PAUSED', UI.skin ? 'PRESS START TO RESUME' : 'PRESS P TO RESUME');
     else if (state == 'cleared')
         banner('MISSION COMPLETE', `+${LIVES_PER_MISSION} LIVES · WARPING TO NEXT PLANET`);
@@ -271,8 +276,6 @@ function gameRenderPost()
     else if (state == 'playing' && player && player.isDead() && lives > 0)
         banner(`${lives} ${lives == 1 ? 'LIFE' : 'LIVES'} LEFT`, 'REDEPLOYING...');
 
-    if (performance.now() < toastUntil)
-        drawText(toastText, W/2, H - u*2, u*.9, 'center', '#f5f0e8');
 }
 
 function drawRadar(context, x, y, w, h)

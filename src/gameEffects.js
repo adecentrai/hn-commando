@@ -30,15 +30,72 @@ export const sound_pickup =       new LJS.Sound([,,537,.02,.02,.22,1,1.59,-6.98,
 export const sound_mission =      new LJS.Sound([1.5,,262,.04,.3,.5,1,.3,,,262,.1,.1,,,,.1,.6,.2]);
 export const sound_spawn =        new LJS.Sound([,,400,.05,.2,.3,,1.5,,,200,.05,.1]);
 
+// play a sound at most once per gap, so dozens of hits in one moment don't pile up voices
+const soundLastPlayed = new Map;
+export function playSound(sound, pos, gap=.04)
+{
+    const now = performance.now();
+    if (now - (soundLastPlayed.get(sound) || 0) < gap*1e3)
+        return;
+    soundLastPlayed.set(sound, now);
+    sound.play(pos);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// terrain changes are batched and drawn in one GPU pass per frame
+// (every separate layer draw is a render target switch, very slow on phones)
+
+const changedTiles = new Map;  // "x,y" -> cell to redraw with its outline
+const debrisStamps = [];       // landed debris waiting to be painted onto the terrain
+const maxStampsPerFrame = 150, maxStampsQueued = 600;
+
+export function resetTerrainChanges()
+{
+    changedTiles.clear();
+    debrisStamps.length = 0;
+}
+
+function markTileChanged(pos)
+{
+    for (let i=-1; i<=1; ++i)
+    for (let j=-1; j<=1; ++j)
+    {
+        const p = vec2(pos.x+i, pos.y+j);
+        changedTiles.set(p.x + ',' + p.y, p);
+    }
+}
+
+export function flushTerrainChanges()
+{
+    if (!changedTiles.size && !debrisStamps.length)
+        return;
+
+    const layer = GameLevel.foregroundTileLayer;
+    layer.redrawStart();
+    for (const pos of changedTiles.values())
+    {
+        if (pos.x < 0 || pos.y < 0 || pos.x >= GameLevel.levelSize.x || pos.y >= GameLevel.levelSize.y)
+            continue;
+        layer.drawTileData(pos, true); // clears the cell first
+        GameLevel.decorateTile(pos, layer, true);
+    }
+    changedTiles.clear();
+
+    // paint landed debris, layer pixels are world units * 16 with the layer at the origin
+    for (const s of debrisStamps.splice(0, maxStampsPerFrame))
+        layer.drawLayerRect(s.pos.scale(16).subtract(s.size.scale(8)), s.size.scale(16), s.color, s.angle);
+    layer.redrawEnd();
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // special effects
 
 export const persistentParticleDestroyCallback = (particle)=>
 {
-    // draw particle to tile layer on death
+    // queue particle to be drawn into the tile layer
     LJS.ASSERT(!particle.tileInfo, 'quick draw to tile layer uses canvas 2d so must be untextured');
-    if (particle.groundObject)
-        GameLevel.foregroundTileLayer.drawTile(particle.pos, particle.size, particle.tileInfo, particle.color, particle.angle, particle.mirror);
+    if (particle.groundObject && debrisStamps.length < maxStampsQueued)
+        debrisStamps.push({pos: particle.pos.copy(), size: particle.size.copy(), color: particle.color.copy(), angle: particle.angle});
 }
 
 export function makeBlood(pos, amount, color=hsl(0,1,.5)) { makeDebris(pos, color, amount, .1, 0); }
@@ -61,31 +118,19 @@ export function makeDebris(pos, color = hsl(), amount = 50, size=.2, restitution
 
 ///////////////////////////////////////////////////////////////////////////////
 
-export function explosion(pos, radius=3)
+// sparedTeam takes no damage, e.g. a destroyed turret's blast spares the player who shot it
+export function explosion(pos, radius=3, sparedTeam='')
 {
     LJS.ASSERT(radius > 0);
 
     sound_explosion.play(pos);
 
+    // destroy level, the redraw happens in the next terrain flush
+    for (let x = -radius; x < radius; ++x)
     {
-        // destroy level
-        const layer = GameLevel.tileLayers[1];
-        layer.redrawStart();
-        for (let x = -radius; x < radius; ++x)
-        {
-            const h = (radius*radius - x*x)**.5;
-            for (let y = -h; y <= h; ++y)
-                destroyTile(pos.add(vec2(x,y)), 0, 0);
-        }
-        // cleanup neighbors
-        const cleanupRadius = radius + 2;
-        for (let x = -cleanupRadius; x < cleanupRadius; ++x)
-        {
-            const h = (cleanupRadius**2 - x**2)**.5;
-            for (let y = -h; y < h; ++y)
-                GameLevel.decorateTile(pos.add(vec2(x,y)).floor(), layer);
-        }
-        layer.redrawEnd();
+        const h = (radius*radius - x*x)**.5;
+        for (let y = -h; y <= h; ++y)
+            destroyTile(pos.add(vec2(x,y)), 0);
     }
 
     // kill/push objects
@@ -93,7 +138,7 @@ export function explosion(pos, radius=3)
     {
         const damage = radius*2;
         const d = o.pos.distance(pos);
-        if (o.isGameObject)
+        if (o.isGameObject && !(sparedTeam && o.team == sparedTeam))
         {
             // do damage
             d < radius && o.damage(damage);
@@ -132,7 +177,7 @@ export function explosion(pos, radius=3)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-export function destroyTile(pos, makeSound = 1, cleanup = 1)
+export function destroyTile(pos, makeSound = 1)
 {
     // pos must be an int
     pos = pos.floor();
@@ -150,23 +195,12 @@ export function destroyTile(pos, makeSound = 1, cleanup = 1)
 
     // create effects
     makeDebris(centerPos, layerData.color.mutate());
-    makeSound && sound_destroyObject.play(centerPos);
+    makeSound && playSound(sound_destroyObject, centerPos);
 
-    // set and clear tile
-    layer.clearData(pos, true);
+    // clear the tile now, the cell and its neighbours' outlines redraw in the next flush
+    layer.clearData(pos);
     layer.setCollisionData(pos, GameLevel.tileType_empty);
-
-    // cleanup neighbors and rebuild WebGL
-    if (cleanup)
-    {
-        const layer = GameLevel.tileLayers[1];
-        layer.redrawStart();
-        for (let i=-1;i<=1;++i)
-        for (let j=-1;j<=1;++j)
-            GameLevel.decorateTile(pos.add(vec2(i,j)), layer);
-        layer.redrawEnd();
-    }
-
+    markTileChanged(pos);
     return true;
 }
 
@@ -194,7 +228,7 @@ export class Sky extends LJS.EngineObject
         // draw stars
         LJS.setAdditiveBlendMode();
         const random = new LJS.RandomGenerator(this.seed);
-        for (let i = 1e3; i--;)
+        for (let i = LJS.isTouchDevice ? 350 : 1e3; i--;)
         {
             const size = random.float(.5,2)**2;
             const speed = random.float() < .9 ? random.float(5) : random.float(9,99);
