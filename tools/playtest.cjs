@@ -125,38 +125,60 @@ async function run()
     }
 
     // --- phone portrait and landscape with touch controls
-    for (const [label, viewport] of [['portrait', {width: 390, height: 844}], ['landscape', {width: 844, height: 390}]])
+    // R36S skin (default on phones) in both orientations, plus the plain overlay controls
+    const phones = [
+        ['r36s-portrait', {width: 390, height: 844}, '', '#dpadCross', '.face.b', '[data-command=start]'],
+        ['r36s-landscape', {width: 844, height: 390}, '', '#dpadCross', '.face.b', '[data-command=start]'],
+        ['r36s-purple', {width: 360, height: 740}, '&shell=purple', '.stick[data-move]', '.stick[data-action]', '[data-command=start]'],
+        ['plain-portrait', {width: 390, height: 844}, '&skin=off', '#dpad', '.tbtn.fire', '#startBtn'],
+    ];
+    for (const [label, viewport, query, padSel, fireSel, startSel] of phones)
     {
         const context = await browser.newContext({viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 2});
         const page = await context.newPage();
         watch(page, label);
-        await page.goto(base + '?debug');
+        await page.goto(base + '?debug' + query);
         await wait(page, 1200);
         await shot(page, `m-${label}-1-title`);
-        await page.tap('#startBtn');
+        await page.tap(startSel);
         await wait(page, 600);
-        const controlsVisible = await page.evaluate(()=> !document.getElementById('controls').hidden);
+        const started = (await state(page)).state;
 
-        // hold the d-pad right and FIRE with two real touch points
+        // hold the d-pad right and fire with two real touch points
         const cdp = await context.newCDPSession(page);
         const center = (sel)=> page.evaluate((sel)=>
         {
             const r = document.querySelector(sel).getBoundingClientRect();
             return {x: r.left + r.width/2, y: r.top + r.height/2, w: r.width};
         }, sel);
-        const pad = await center('#dpad'), fire = await center('.tbtn.fire');
+        const pad = await center(padSel), fire = await center(fireSel);
         const padPoint = {x: pad.x + pad.w*.4, y: pad.y, id: 1}, firePoint = {x: fire.x, y: fire.y, id: 2};
         const before = await state(page);
         await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [padPoint]});
         await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [padPoint, firePoint]});
         await wait(page, 1500);
         await shot(page, `m-${label}-2-touch`);
-        const during = await page.evaluate(()=> ({fireDown: document.querySelector('.tbtn.fire').classList.contains('down')}));
+        const fireDown = await page.evaluate((sel)=> document.querySelector(sel).classList.contains('down'), fireSel);
         await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
         await wait(page, 300);
         const after = await state(page);
-        const released = await page.evaluate(()=> !document.querySelector('.tbtn.down'));
-        report[label] = {controlsVisible, before: before.pos, after: after.pos, fireDown: during.fireDown, released, score: after.score};
+        const released = await page.evaluate(()=> !document.querySelector('.down'));
+
+        // START pauses and resumes during play on the skin
+        let pause;
+        if (startSel != '#startBtn')
+        {
+            await page.tap(startSel);
+            await wait(page, 300);
+            const t0 = (await state(page)).time;
+            await wait(page, 600);
+            const paused = (await state(page)).time == t0;
+            await shot(page, `m-${label}-3-paused`);
+            await page.tap(startSel);
+            await wait(page, 400);
+            pause = {paused, resumed: (await state(page)).time > t0};
+        }
+        report[label] = {started, before: before.pos, after: after.pos, fireDown, released, pause};
         await context.close();
     }
 

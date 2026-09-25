@@ -44,9 +44,22 @@ if (new URLSearchParams(location.search).has('debug'))
 LJS.setTouchGamepadEnable(false);
 LJS.setTouchInputEnable(!UI.isTouch);
 
-// limit canvas aspect ratios to support most modern HD devices
-LJS.setCanvasMinAspect(.4);
-LJS.setCanvasMaxAspect(2.5);
+if (UI.skin)
+    LJS.setCanvasFixedSize(vec2(480, 360)); // the R36S's 4:3 screen, scaled by css
+else
+{
+    // limit canvas aspect ratios to support most modern HD devices
+    LJS.setCanvasMinAspect(.4);
+    LJS.setCanvasMaxAspect(2.5);
+}
+
+// short messages drawn over the game, timed in real time so they show while paused
+let toastText = '', toastUntil = 0;
+function toast(text, seconds=1.5)
+{
+    toastText = text;
+    toastUntil = performance.now() + seconds*1e3;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -87,6 +100,19 @@ function respawn()
     GameEffects.sound_spawn.play(pos);
 }
 
+function togglePause()
+{
+    if (state != 'playing' && state != 'cleared')
+        return;
+    LJS.setPaused(!LJS.paused);
+}
+
+function toggleSound()
+{
+    LJS.setSoundEnable(!LJS.soundEnable);
+    toast(LJS.soundEnable ? 'SOUND ON' : 'SOUND OFF');
+}
+
 function gameOver()
 {
     state = 'over';
@@ -124,7 +150,13 @@ async function gameInit()
     };
 
     try { bestScore = +localStorage.getItem('hnCommandoBest') || 0; } catch(e) {}
-    UI.init({onStart: startGame, onCta: ()=> track('cta_click', {score, mission})});
+    UI.init({
+        onStart: startGame,
+        onPause: togglePause,
+        onSelect: toggleSound,
+        onFn: ()=> toast('B FIRE · A JUMP · Y GRENADE · X ROLL', 2.5),
+        onCta: ()=> track('cta_click', {score, mission}),
+    });
 
     // a live planet sits behind the title screen
     loadMission();
@@ -198,7 +230,7 @@ function gameRenderPost()
 
     const context = LJS.mainContext;
     const W = LJS.mainCanvasSize.x, H = LJS.mainCanvasSize.y;
-    const u = LJS.clamp(LJS.min(W, H)/20, 13, 28); // hud unit
+    const u = LJS.clamp(LJS.min(W, H)/22, 12, 28); // hud unit
     const pad = u*.6;
     const drawText = (text, x, y, size, align='left', color='#fff')=>
     {
@@ -230,12 +262,17 @@ function gameRenderPost()
         drawText(title, W/2, H*.3, u*2, 'center', '#e2b96f');
         drawText(subtitle, W/2, H*.3 + u*2.4, u, 'center');
     };
-    if (state == 'cleared')
+    if (LJS.paused)
+        banner('PAUSED', UI.skin ? 'PRESS START TO RESUME' : 'PRESS P TO RESUME');
+    else if (state == 'cleared')
         banner('MISSION COMPLETE', `+${LIVES_PER_MISSION} LIVES · WARPING TO NEXT PLANET`);
     else if (bannerTimer.active() && state == 'playing')
         banner(`MISSION ${mission}`, `ELIMINATE ALL ${hostilesLeft} HOSTILES`);
     else if (state == 'playing' && player && player.isDead() && lives > 0)
         banner(`${lives} ${lives == 1 ? 'LIFE' : 'LIVES'} LEFT`, 'REDEPLOYING...');
+
+    if (performance.now() < toastUntil)
+        drawText(toastText, W/2, H - u*2, u*.9, 'center', '#f5f0e8');
 }
 
 function drawRadar(context, x, y, w, h)
@@ -275,4 +312,4 @@ function drawRadar(context, x, y, w, h)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Startup LittleJS Engine
-LJS.engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['assets/tiles.png', 'assets/tilesLevel.png']);
+LJS.engineInit(gameInit, gameUpdate, gameUpdatePost, gameRender, gameRenderPost, ['assets/tiles.png', 'assets/tilesLevel.png'], UI.rootElement);

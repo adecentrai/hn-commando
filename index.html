@@ -16,13 +16,13 @@ html, body {
     font-family:"Courier New", monospace;
     touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none;
 }
+[hidden] { display:none !important; }
 
-/* title and game over */
+/* ---------------- title and game over ---------------- */
 #screens {
     position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
     padding:16px; box-sizing:border-box; background:rgba(8,8,20,.55); overflow-y:auto;
 }
-#screens[hidden], .screen[hidden] { display:none; }
 .screen {
     width:100%; max-width:420px; box-sizing:border-box; text-align:center;
     background:rgba(26,26,46,.94); border:2px solid var(--gold); border-radius:10px;
@@ -40,16 +40,16 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
 .btn-cta { background:var(--cream); color:var(--navy); }
 .btn:active { transform:translateY(1px); }
 .hint { margin:12px 0 0; font-size:12px; line-height:1.5; color:#aab; }
+.press { display:none; }
 .rotate { display:none; }
-@media (orientation:portrait) { .touch .rotate { display:block; } }
+@media (orientation:portrait) { .touch:not(.skin) .rotate { display:block; } }
 .stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:14px 0 4px; }
 .stat b { display:block; font-size:22px; color:var(--gold); }
 .stat span { font-size:11px; letter-spacing:1px; color:#bbc; }
 .pitch { margin:16px 0 0; padding-top:14px; border-top:1px dashed rgba(226,185,111,.5); font-size:14px; line-height:1.5; color:var(--cream); }
 .brand { margin:14px 0 0; font-size:11px; color:#99a; }
 
-/* touch controls */
-#controls[hidden] { display:none; }
+/* ---------------- plain overlay touch controls (?skin=off) ---------------- */
 #dpad {
     position:fixed; z-index:10; width:132px; height:132px; border-radius:50%;
     left:max(16px, env(safe-area-inset-left)); bottom:max(16px, env(safe-area-inset-bottom));
@@ -75,9 +75,160 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
 .tbtn.big { width:78px; height:78px; font-size:14px; }
 .tbtn.fire { border-color:rgba(255,110,130,.85); }
 .tbtn.down { background:rgba(226,185,111,.6); border-color:var(--gold); }
+
+/* ---------------- R36S handheld skin ----------------
+   Slab-style body (not a clamshell), 4:3 screen in a black bezel on top,
+   black cross d-pad left, ABXY diamond right (X blue top, Y green left,
+   A red right, B yellow bottom), speaker grille, FN, SELECT, START, two sticks. */
+.skin { background:radial-gradient(ellipse at 50% 30%, #2a2a3e, #0b0b14 70%); }
+#device {
+    --shell-a:rgba(92,96,108,.96); --shell-b:rgba(46,49,58,.98); --shell-edge:rgba(255,255,255,.16);
+    --shell-ink:rgba(255,255,255,.55);
+    --w:min(100vw, 56dvh);
+    position:fixed; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:var(--w); height:min(100dvh, calc(var(--w) * 1.75));
+    box-sizing:border-box; padding:calc(var(--w) * .045);
+    display:grid; grid-template-columns:1fr auto 1fr; grid-template-rows:auto 1fr;
+    grid-template-areas:"screen screen screen" "left mid right";
+    border-radius:calc(var(--w) * .07) calc(var(--w) * .07) calc(var(--w) * .1) calc(var(--w) * .1);
+    background:linear-gradient(160deg, var(--shell-a), var(--shell-b));
+    box-shadow:inset 0 0 0 2px var(--shell-edge), inset 0 calc(var(--w) * .03) calc(var(--w) * .06) rgba(255,255,255,.08),
+        0 20px 60px rgba(0,0,0,.6);
+    touch-action:none;
+}
+.shell-white #device { --shell-a:rgba(242,243,245,.98); --shell-b:rgba(206,208,214,.98); --shell-edge:rgba(255,255,255,.7); --shell-ink:rgba(40,40,50,.6); }
+.shell-purple #device { --shell-a:rgba(150,110,210,.93); --shell-b:rgba(88,52,140,.96); --shell-edge:rgba(255,255,255,.25); }
+
+#bezel {
+    grid-area:screen; background:#07070a; border-radius:calc(var(--w) * .03);
+    padding:calc(var(--w) * .035) calc(var(--w) * .035) calc(var(--w) * .05);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); position:relative;
+}
+#bezel::after {
+    content:"HN-R36S"; position:absolute; left:0; right:0; bottom:calc(var(--w) * .012); text-align:center;
+    font:bold calc(var(--w) * .024) "Courier New", monospace; letter-spacing:.3em; color:rgba(255,255,255,.28);
+}
+#screen { position:relative; width:100%; aspect-ratio:4/3; background:#000; overflow:hidden; container-type:size; }
+
+.side { display:flex; flex-direction:column; align-items:center; justify-content:space-evenly; }
+#left { grid-area:left; }
+#right { grid-area:right; }
+#mid { grid-area:mid; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:calc(var(--w) * .03); padding-top:calc(var(--w) * .07); }
+
+/* d-pad: black cross with arrows */
+#dpadCross { position:relative; width:calc(var(--w) * .27); aspect-ratio:1; touch-action:none; }
+#dpadCross::before, #dpadCross::after {
+    content:""; position:absolute; background:linear-gradient(145deg, #2c2c30, #0c0c0e);
+    border-radius:calc(var(--w) * .012); box-shadow:0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.12);
+}
+#dpadCross::before { left:0; right:0; top:33%; bottom:33%; }
+#dpadCross::after { top:0; bottom:0; left:33%; right:33%; }
+#dpadCross .arrows {
+    position:absolute; inset:0; z-index:1; pointer-events:none; color:#55565c;
+    font-size:calc(var(--w) * .03); display:grid; grid-template:repeat(3, 1fr) / repeat(3, 1fr); place-items:center;
+}
+#dpadCross .arrows span:nth-child(1) { grid-area:1/2; } #dpadCross .arrows span:nth-child(2) { grid-area:2/1; }
+#dpadCross .arrows span:nth-child(3) { grid-area:2/3; } #dpadCross .arrows span:nth-child(4) { grid-area:3/2; }
+#dpadCross[data-dir*="u"] { transform:perspective(200px) rotateX(10deg); }
+#dpadCross[data-dir*="d"] { transform:perspective(200px) rotateX(-10deg); }
+#dpadCross[data-dir="l"] { transform:perspective(200px) rotateY(-10deg); }
+#dpadCross[data-dir="r"] { transform:perspective(200px) rotateY(10deg); }
+
+/* ABXY diamond */
+#abxy { position:relative; width:calc(var(--w) * .3); aspect-ratio:1; }
+.face {
+    position:absolute; width:36%; aspect-ratio:1; padding:0; border:0; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #3b3b40, #0b0b0d 70%);
+    box-shadow:0 3px 0 #000, inset 0 1px 0 rgba(255,255,255,.15);
+    font:bold calc(var(--w) * .045) Arial, sans-serif; touch-action:none;
+}
+.face.x { left:32%; top:0; color:#3d7bff; } .face.y { left:0; top:32%; color:#3fc15c; }
+.face.a { right:0; top:32%; color:#ff4a4a; } .face.b { left:32%; bottom:0; color:#ffd23f; }
+.face.down, .small.down { transform:translateY(2px); box-shadow:0 1px 0 #000, inset 0 2px 4px rgba(0,0,0,.6); }
+
+/* speaker, FN, SELECT, START */
+.speaker { width:calc(var(--w) * .14); height:calc(var(--w) * .06);
+    background:repeating-linear-gradient(90deg, rgba(0,0,0,.55) 0 calc(var(--w) * .022), transparent 0 calc(var(--w) * .032));
+    -webkit-mask:linear-gradient(transparent 0 20%, #000 20% 40%, transparent 40% 60%, #000 60% 80%, transparent 80%);
+            mask:linear-gradient(transparent 0 20%, #000 20% 40%, transparent 40% 60%, #000 60% 80%, transparent 80%); }
+.sys { display:flex; flex-direction:column; align-items:center; gap:calc(var(--w) * .006); }
+.sys label { font:bold calc(var(--w) * .026) Arial, sans-serif; letter-spacing:.05em; color:var(--shell-ink); }
+.small {
+    width:calc(var(--w) * .075); aspect-ratio:1; padding:0; border:0; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #3b3b40, #0b0b0d 70%); box-shadow:0 2px 0 #000; touch-action:none;
+}
+.sysrow { display:flex; gap:calc(var(--w) * .06); }
+
+/* analog sticks */
+.stick {
+    position:relative; width:calc(var(--w) * .21); aspect-ratio:1; border-radius:50%; padding:0; border:0;
+    background:radial-gradient(circle, #1a1a1e 55%, #0a0a0c 56% 62%, rgba(0,0,0,.35) 63%); touch-action:none;
+}
+.stick .knob {
+    position:absolute; left:18%; top:18%; width:64%; height:64%; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle at 50% 45%, #111 40%, #2a2a2e 42%, #0e0e10 70%);
+    box-shadow:0 4px 6px rgba(0,0,0,.6), inset 0 2px 2px rgba(255,255,255,.1);
+}
+.stick.down .knob { filter:brightness(1.4); }
+
+/* game screens shrink to fit inside the 4:3 R36S screen */
+.skin #screens { position:absolute; inset:0; z-index:20; padding:3cqw; background:rgba(8,8,20,.45); overflow:hidden; }
+.skin .screen { max-width:none; height:100%; display:flex; flex-direction:column; justify-content:center; padding:3cqw 4cqw; border-width:1px; border-radius:2cqw; background:rgba(26,26,46,.82); }
+.skin h1 { font-size:9cqw; margin:0; text-shadow:.6cqw .6cqw 0 #000; }
+.skin .tag, .skin .brand { font-size:3.3cqw; margin:.5cqw 0 2cqw; }
+.skin .brief, .skin .rotate, .skin #startBtn, .skin #againBtn { display:none; }
+.skin .press { display:block; margin:2cqw 0 1cqw; font:bold 5cqw "Courier New", monospace; color:var(--cream); animation:blink 1s steps(2) infinite; }
+.skin .hint { font-size:3.3cqw; margin:1cqw 0 0; }
+.skin .stats { margin:2cqw 0 0; gap:2cqw; }
+.skin .stat b { font-size:6cqw; } .skin .stat span { font-size:2.8cqw; }
+.skin .pitch { font-size:3.4cqw; margin:2cqw 0 0; padding-top:2cqw; }
+.skin .btn-cta { font-size:4cqw; padding:2.2cqw; margin-top:2cqw; border-radius:1.5cqw; }
+@keyframes blink { 50% { opacity:0; } }
+
+/* phone on its side: screen in the middle, controls either side */
+@media (orientation:landscape) {
+    #device {
+        --h:min(100dvh, 46vw);
+        --w:calc(var(--h) * 1.05);
+        width:min(100vw, calc(var(--h) * 2.3)); height:var(--h);
+        grid-template-columns:1fr auto 1fr; grid-template-rows:1fr auto;
+        grid-template-areas:"left screen right" "left mid right";
+        padding:calc(var(--h) * .04);
+        border-radius:calc(var(--h) * .1);
+        background:linear-gradient(160deg, var(--shell-a), var(--shell-b));
+    }
+    #bezel { width:calc((var(--h) * .64) * 4 / 3); align-self:start; }
+    #mid { flex-direction:row; justify-content:center; padding-top:calc(var(--h) * .02); gap:calc(var(--h) * .05); }
+    #mid .speaker { display:none; }
+}
 </style>
 </head>
 <body>
+
+<div id="device" hidden>
+    <div id="bezel"><div id="screen"></div></div>
+    <div id="left" class="side">
+        <div id="dpadCross" data-move><div class="arrows"><span>▲</span><span>◀</span><span>▶</span><span>▼</span></div></div>
+        <div class="stick" data-move aria-label="Left stick: move"><div class="knob" data-knob></div></div>
+    </div>
+    <div id="mid">
+        <div class="speaker"></div>
+        <div class="sys"><button class="small" data-command="fn" aria-label="FN: show controls"></button><label>FN</label></div>
+        <div class="sysrow">
+            <div class="sys"><button class="small" data-command="select" aria-label="SELECT: sound on or off"></button><label>SELECT</label></div>
+            <div class="sys"><button class="small" data-command="start" aria-label="START: start or pause"></button><label>START</label></div>
+        </div>
+    </div>
+    <div id="right" class="side">
+        <div id="abxy">
+            <button class="face x" data-action="roll" aria-label="X: roll">X</button>
+            <button class="face y" data-action="grenade" aria-label="Y: grenade">Y</button>
+            <button class="face a" data-action="jump" aria-label="A: jump">A</button>
+            <button class="face b" data-action="fire" aria-label="B: fire">B</button>
+        </div>
+        <button class="stick" data-action="fire" aria-label="Right stick: fire"><div class="knob" data-knob></div></button>
+    </div>
+</div>
 
 <div id="screens">
     <div class="screen" id="title">
@@ -85,6 +236,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
         <p class="tag">A retro run &amp; gun by Hobbyist Nirvana</p>
         <p class="brief">Alien outposts are spreading across the galaxy. Drop in, wipe out every hostile, and warp to the next planet. You have 10 lives, and each cleared mission adds 3 more.</p>
         <button class="btn btn-primary" id="startBtn">▶ START MISSION</button>
+        <p class="press">PRESS START</p>
         <p class="hint" id="controlsHint"></p>
         <p class="hint rotate">Tip: turn your phone sideways for a wider view.</p>
     </div>
@@ -97,6 +249,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
             <div class="stat"><b id="goBest">0</b><span>BEST</span></div>
         </div>
         <button class="btn btn-primary" id="againBtn">↻ PLAY AGAIN</button>
+        <p class="press">PRESS START</p>
         <p class="pitch">Love retro games? The <b>HN-R36S-WiFi</b> puts 15,000+ classic games in your pocket.</p>
         <a class="btn btn-cta" id="ctaBtn" target="_top" rel="noopener"
            href="https://hobbyistnirvana.com/products/hn-r36s-wifi-handheld-retro-game-console-64gb-3-5-inch-display-with-wifi-support?utm_source=hn_commando&amp;utm_medium=game&amp;utm_campaign=play_page">GET THE R36S →</a>
@@ -105,7 +258,7 @@ h1 { margin:0 0 4px; font-size:clamp(28px, 8vw, 42px); letter-spacing:2px; color
 </div>
 
 <div id="controls" hidden>
-    <div id="dpad"><div id="dpadKnob"></div></div>
+    <div id="dpad" data-move><div id="dpadKnob" data-knob></div></div>
     <div id="buttons">
         <button class="tbtn" data-action="grenade">GRENADE</button>
         <button class="tbtn" data-action="roll">ROLL</button>

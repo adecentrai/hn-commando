@@ -47,6 +47,27 @@ Prints a JSON report and saves screenshots to `<outDir>`.
 Touch controls are DOM buttons (`src/ui.js`); the engine's own touch input is switched off
 on touch devices so taps on the title and game-over buttons and the store link keep working.
 
+## R36S skin (phones)
+
+On touch devices the game runs inside a CSS-drawn HN-R36S: slab body, 4:3 screen in a black
+bezel, black cross d-pad, ABXY diamond (X blue, Y green, A red, B yellow), FN, SELECT, START
+and two sticks. The engine renders at a fixed 480×360 into `#screen`. Rotating the phone lays
+the device out sideways.
+
+| R36S button        | Action                  |
+|--------------------|-------------------------|
+| D-pad / left stick | Move and climb          |
+| B / right stick    | Fire                    |
+| A                  | Jump                    |
+| Y                  | Grenade                 |
+| X                  | Roll                    |
+| START              | Start, pause and resume |
+| SELECT             | Sound on/off            |
+| FN                 | Show the controls       |
+
+URL options: `?shell=white` or `?shell=purple` (default transparent black), `?skin=r36s` to
+show the skin on desktop, `?skin=off` for plain overlay buttons on phones.
+
 ## Store hooks
 
 - Game over shows the score and a "GET THE R36S" link (`target="_top"`) with

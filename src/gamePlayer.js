@@ -33,7 +33,7 @@ export class Player extends GameCharacter.Character
     update()
     {
         const touch = UI.touchInput;
-        const mouseMode = !UI.isTouch && !LJS.isUsingGamepad;
+        const mouseMode = !UI.isTouch && !UI.skin && !LJS.isUsingGamepad;
         const key = (...codes)=> codes.some(c=> LJS.keyIsDown(c));
 
         // movement control
